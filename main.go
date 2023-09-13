@@ -12,20 +12,20 @@ import (
 )
 
 const (
-	versionStr = "v1.3, update data: 2023-09-13, author: Sun Quan"
+	versionStr = "v1.4, update data: 2023-09-13, author: Sun Quan\nUpdata Info: Optimize without any arguments"
 )
 
 var (
-	oracleUrl   *string   = pflag.String("url", "", "oracle url, e.g. oracle://user:pass@server/service_name")
+	oracleUrl   *string   = pflag.String("url", "", "oracle url, e.g. oracle://<user>:<password>@<host>:<port>/<service_name>")
 	username    *string   = pflag.StringP("username", "u", "dbsel", "username to login")
 	password    *string   = pflag.StringP("password", "p", "", "password")
-	host        *string   = pflag.StringP("host", "h", "localhost", "host")
+	host        *string   = pflag.String("host", "localhost", "host")
 	port        *int      = pflag.IntP("port", "P", 1521, "port")
-	service     *string   = pflag.StringP("service", "s", "", "service")
+	service     *string   = pflag.StringP("service", "s", "", "service name or sid")
 	selectquery *string   = pflag.StringP("sql", "q", "", "select sql")
 	expColNames *[]string = pflag.StringSlice("expCols", nil, "output column names, optional, columus count must be same as select query, default is same as select query. e.g. --expColNames=\"col1,col2,col3\"")
 	expTabName  *string   = pflag.String("expTab", "", "output table name, required")
-	expUserName *string   = pflag.String("expUser", "", "output user name, required")
+	expUserName *string   = pflag.String("expUser", "", "output user name")
 
 	outFile *string = pflag.StringP("outFile", "o", "insert.sql", "output file name")
 
@@ -37,6 +37,11 @@ func init() {
 }
 
 func main() {
+	if len(os.Args) == 1 {
+		pflag.Usage()
+		return
+	}
+
 	if *version {
 		fmt.Println(versionStr)
 		return
