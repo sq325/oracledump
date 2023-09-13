@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	versionStr = "v1.0, update data: 2023-09-13, author: Sun Quan"
+	versionStr = "v1.3, update data: 2023-09-13, author: Sun Quan"
 )
 
 var (
@@ -23,9 +23,9 @@ var (
 	port        *int      = pflag.IntP("port", "P", 1521, "port")
 	service     *string   = pflag.StringP("service", "s", "", "service")
 	selectquery *string   = pflag.StringP("sql", "q", "", "select sql")
-	expColNames *[]string = pflag.StringSlice("expColNames", nil, "output column names, optional, columus count must be same as select query, default is same as select query. e.g. --expColNames=\"col1,col2,col3\"")
-	expTabName  *string   = pflag.String("expTabName", "", "output table name, required")
-	expUserName *string   = pflag.String("expUserName", "", "output user name, required")
+	expColNames *[]string = pflag.StringSlice("expCols", nil, "output column names, optional, columus count must be same as select query, default is same as select query. e.g. --expColNames=\"col1,col2,col3\"")
+	expTabName  *string   = pflag.String("expTab", "", "output table name, required")
+	expUserName *string   = pflag.String("expUser", "", "output user name, required")
 
 	outFile *string = pflag.StringP("outFile", "o", "insert.sql", "output file name")
 
@@ -50,12 +50,12 @@ func main() {
 		panic("password is required")
 	case *service == "":
 		panic("service is required")
+	}
+	switch {
 	case *selectquery == "":
 		panic("select query is required")
 	case *expTabName == "":
 		panic("expTabName is required")
-	case *expUserName == "":
-		panic("expUserName is required")
 	}
 
 	// connect to oracle
@@ -113,11 +113,15 @@ func generateInsertStatement(rows *sql.Rows, expColNames []string, expTabName, e
 	if err != nil {
 		return "", err
 	}
-	if expColNames == nil {
+	columnCount := len(columnNames)
+	if expColNames != nil {
+		if len(expColNames) != columnCount {
+			return "", fmt.Errorf("expColNames count must be same as select query, expColNames count: %d, select query column count: %d", len(expColNames), columnCount)
+		}
+	} else {
 		expColNames = columnNames
 	}
 
-	columnCount := len(columnNames)
 	values := make([]any, columnCount)
 	valuePointers := make([]any, columnCount)
 	var b strings.Builder
@@ -133,15 +137,17 @@ func generateInsertStatement(rows *sql.Rows, expColNames []string, expTabName, e
 		}
 
 		// 构建 INSERT 语句
-		tmplstr := `INSERT INTO {{.Table}} ({{range $index, $col := .Cols}}{{if $index}},{{end}}{{$col}}{{end}}) VALUES ({{range $index, $val := .Vals}}{{if $index}},{{end}}{{$val}}{{end}});`
+		tmplstr := `INSERT INTO {{if .User}}{{.User}}.{{end}}{{.Table}} ({{range $index, $col := .Cols}}{{if $index}},{{end}}{{$col}}{{end}}) VALUES ({{range $index, $val := .Vals}}{{if $index}},{{end}}'{{$val}}'{{end}});`
 		data := struct {
 			Cols  []string
 			Vals  []any
+			User  string
 			Table string
 		}{
 			Cols:  expColNames,
 			Vals:  values,
 			Table: expTabName,
+			User:  expUserName,
 		}
 		tmpl, err := template.New("InsertStmt").Parse(tmplstr)
 		if err != nil {
@@ -153,5 +159,6 @@ func generateInsertStatement(rows *sql.Rows, expColNames []string, expTabName, e
 		}
 		b.WriteString("\n")
 	}
+	b.WriteString("commit;")
 	return b.String(), nil
 }
